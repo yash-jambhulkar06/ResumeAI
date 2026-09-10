@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResumeAI | Resume analysis</title>
+    <script>
+        (() => {
+            const saved = localStorage.getItem("resumeai-theme");
+            const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            document.documentElement.dataset.theme = saved || (systemDark ? "dark" : "light");
+        })();
+    </script>
+    <style>
+        :root {
+            --bg: #f5f7fb; --surface: #ffffff; --surface-muted: #f0f3f9;
+            --text: #172033; --muted: #667085; --border: #dfe4ec;
+            --accent: #5b4ee8; --accent-strong: #483bd0; --accent-soft: #eeecff;
+            --danger-bg: #fff0f0; --danger: #a63b3b; --shadow: 0 18px 50px rgba(30, 39, 70, .09);
+        }
+        [data-theme="dark"] {
+            --bg: #111522; --surface: #1a2030; --surface-muted: #232b3d;
+            --text: #f3f5fa; --muted: #a6afc2; --border: #303a50;
+            --accent: #9288ff; --accent-strong: #aaa2ff; --accent-soft: #292651;
+            --danger-bg: #3a2028; --danger: #ffb0b7; --shadow: 0 18px 50px rgba(0, 0, 0, .22);
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: Georgia, "Times New Roman", serif; background: var(--bg); color: var(--text); }
+        button, input, textarea { font: inherit; }
+        .navbar { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 max(24px, calc((100% - 1120px) / 2)); border-bottom: 1px solid var(--border); background: var(--surface); }
+        .logo { color: var(--text); font: 700 22px Arial, sans-serif; letter-spacing: -.6px; }
+        .logo span { color: var(--accent); }
+        .theme-toggle { width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 18px; }
+        .theme-toggle:hover, .theme-toggle:focus-visible { border-color: var(--accent); outline: 3px solid color-mix(in srgb, var(--accent) 22%, transparent); }
+        .hero { max-width: 920px; margin: 0 auto; padding: 64px 24px 80px; }
+        .hero-intro { max-width: 650px; margin-bottom: 34px; }
+        .eyebrow { margin: 0 0 12px; color: var(--accent); font: 700 12px Arial, sans-serif; letter-spacing: 1.8px; text-transform: uppercase; }
+        h1 { margin: 0 0 14px; font-size: clamp(38px, 6vw, 66px); line-height: .98; letter-spacing: -2.5px; }
+        .hero-intro p { max-width: 560px; margin: 0; color: var(--muted); font: 17px/1.6 Arial, sans-serif; }
+        .card { padding: clamp(24px, 4vw, 42px); border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+        .alert { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 22px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent); border-radius: 10px; background: var(--danger-bg); color: var(--danger); font: 14px/1.5 Arial, sans-serif; }
+        .form-group { margin-bottom: 24px; }
+        label, .field-label { display: block; margin-bottom: 9px; font: 700 13px Arial, sans-serif; color: var(--text); }
+        input[type="text"], textarea { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 14px 15px; background: var(--surface); color: var(--text); outline: none; }
+        input[type="text"]:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+        textarea { min-height: 210px; resize: vertical; line-height: 1.5; }
+        .upload-box { position: relative; min-height: 220px; display: grid; place-items: center; border: 1.5px dashed var(--border); border-radius: 12px; background: var(--surface-muted); text-align: center; transition: background .2s, border-color .2s, transform .2s; }
+        .upload-box.is-dragging, .upload-box:hover { border-color: var(--accent); background: var(--accent-soft); }
+        .upload-box.is-dragging { transform: translateY(-2px); }
+        .upload-box input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+        .upload-content { pointer-events: none; padding: 20px; }
+        .upload-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 12px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); font: 24px Arial, sans-serif; }
+        .upload-content h2 { margin: 0 0 8px; font-size: 21px; }
+        .upload-content p, .upload-content small { margin: 0; color: var(--muted); font: 14px/1.5 Arial, sans-serif; }
+        .browse { color: var(--accent); font-weight: 700; }
+        .file-detail { display: none; align-items: center; gap: 12px; margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font: 13px Arial, sans-serif; }
+        .file-detail.visible { display: flex; }
+        .file-preview { width: 54px; height: 54px; object-fit: cover; border-radius: 7px; background: var(--surface-muted); }
+        .file-copy { min-width: 0; flex: 1; color: var(--text); }
+        .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+        .file-meta { margin-top: 4px; color: var(--muted); }
+        .remove-file { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 20px; }
+        .remove-file:hover { color: var(--danger); }
+        .divider { display: flex; align-items: center; gap: 14px; margin: 28px 0; color: var(--muted); font: 700 11px Arial, sans-serif; letter-spacing: 1px; }
+        .divider::before, .divider::after { content: ""; height: 1px; flex: 1; background: var(--border); }
+        .analyze-btn { width: 100%; border: 0; border-radius: 9px; padding: 15px; background: var(--accent); color: #fff; cursor: pointer; font: 700 15px Arial, sans-serif; transition: background .2s, transform .2s; }
+        .analyze-btn:hover { background: var(--accent-strong); transform: translateY(-1px); }
+        .analyze-btn:disabled { opacity: .7; cursor: wait; transform: none; }
+        .note { margin: 15px 0 0; color: var(--muted); text-align: center; font: 12px Arial, sans-serif; }
+        @media (max-width: 600px) { .hero { padding-top: 42px; } .navbar { height: 64px; } .card { padding: 22px 18px; } h1 { letter-spacing: -1.5px; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar"><div class="logo">Resume<span>AI</span></div><button class="theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">☾</button></nav>
+    <main class="hero">
+        {% if error %}<div class="alert" role="alert"><strong>!</strong><span>{{ error }}</span></div>{% endif %}
+        <section class="hero-intro"><p class="eyebrow">AI-powered career feedback</p><h1>Make your resume interview-ready.</h1><p>Analyze your resume against a target role and get focused, practical improvements in seconds.</p></section>
+        <section class="card">
+            <form method="POST" enctype="multipart/form-data" id="analysis-form">
+                {% csrf_token %}
+                <div class="form-group"><label for="job_role">Target job role</label><input type="text" id="job_role" name="job_role" value="{{ job_role|default:'' }}" placeholder="e.g. Python Django Developer" required></div>
+                <div class="form-group"><span class="field-label">Upload your resume</span><div class="upload-box" id="upload-box"><input type="file" id="resume_file" name="resume_file" accept=".pdf,.docx,.txt,.jpg,.jpeg,.png"><div class="upload-content"><div class="upload-icon">↑</div><h2>Drop your resume here</h2><p>or <span class="browse">browse files</span></p><small>PDF &bull; DOCX &bull; TXT &bull; JPG &bull; PNG &middot; Maximum 5 MB</small></div></div><div class="file-detail" id="file-detail"><img class="file-preview" id="file-preview" alt="Selected resume preview"><div class="file-copy"><div class="file-name" id="file-name"></div><div class="file-meta" id="file-meta"></div></div><button class="remove-file" id="remove-file" type="button" aria-label="Remove selected file">&times;</button></div></div>
+                <div class="divider">OR</div>
+                <div class="form-group"><label for="resume_text">Paste resume text</label><textarea id="resume_text" name="resume_text" placeholder="Paste your resume text here...">{{ resume_text|default:'' }}</textarea></div>
+                <button class="analyze-btn" id="analyze-btn" type="submit"><span id="button-label">Analyze Resume</span></button><p class="note">Your resume is processed for this analysis and is not uploaded to a public location.</p>
+            </form>
+        </section>
+    </main>
+    <script>
+        const root = document.documentElement;
+        const themeToggle = document.querySelector(".theme-toggle");
+        const setTheme = (theme) => { root.dataset.theme = theme; localStorage.setItem("resumeai-theme", theme); themeToggle.textContent = theme === "dark" ? "☀" : "☾"; };
+        setTheme(root.dataset.theme);
+        themeToggle.addEventListener("click", () => setTheme(root.dataset.theme === "dark" ? "light" : "dark"));
+        const input = document.querySelector("#resume_file"); const uploadBox = document.querySelector("#upload-box"); const detail = document.querySelector("#file-detail"); const preview = document.querySelector("#file-preview"); const name = document.querySelector("#file-name"); const meta = document.querySelector("#file-meta");
+        const showFile = (file) => { if (!file) return; name.textContent = file.name; meta.textContent = `${(file.size / 1024).toFixed(1)} KB · ${file.type || "Document"}`; detail.classList.add("visible"); if (file.type.startsWith("image/")) { preview.src = URL.createObjectURL(file); preview.style.display = "block"; } else { preview.removeAttribute("src"); preview.style.display = "none"; } };
+        input.addEventListener("change", () => showFile(input.files[0]));
+        ["dragenter", "dragover"].forEach((eventName) => uploadBox.addEventListener(eventName, (event) => { event.preventDefault(); uploadBox.classList.add("is-dragging"); }));
+        ["dragleave", "drop"].forEach((eventName) => uploadBox.addEventListener(eventName, (event) => { event.preventDefault(); uploadBox.classList.remove("is-dragging"); }));
+        uploadBox.addEventListener("drop", (event) => { const files = event.dataTransfer.files; if (files.length) { input.files = files; showFile(files[0]); } });
+        document.querySelector("#remove-file").addEventListener("click", () => { input.value = ""; detail.classList.remove("visible"); });
+        document.querySelector("#analysis-form").addEventListener("submit", () => { document.querySelector("#analyze-btn").disabled = true; document.querySelector("#button-label").textContent = "Analyzing Resume..."; });
+    </script>
+</body>
+</html>

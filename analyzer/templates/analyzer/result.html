@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resume analysis | ResumeAI</title>
+    <script>
+        (() => { const saved = localStorage.getItem("resumeai-theme"); document.documentElement.dataset.theme = saved || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); })();
+    </script>
+    <style>
+        :root { --bg:#f5f7fb; --surface:#fff; --text:#172033; --muted:#667085; --border:#dfe4ec; --accent:#5b4ee8; --accent-soft:#eeecff; --shadow:0 14px 35px rgba(30,39,70,.08); }
+        [data-theme="dark"] { --bg:#111522; --surface:#1a2030; --text:#f3f5fa; --muted:#a6afc2; --border:#303a50; --accent:#9288ff; --accent-soft:#292651; --shadow:0 14px 35px rgba(0,0,0,.2); }
+        * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font-family:Georgia,"Times New Roman",serif; }
+        .navbar { height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 max(24px,calc((100% - 1120px)/2)); border-bottom:1px solid var(--border); background:var(--surface); }
+        .logo { color:var(--text); font:700 22px Arial,sans-serif; letter-spacing:-.6px; } .logo span { color:var(--accent); }
+        .nav-actions { display:flex; gap:10px; } .icon-btn,.action { border:1px solid var(--border); border-radius:9px; padding:10px 13px; background:var(--surface); color:var(--text); cursor:pointer; font:700 13px Arial,sans-serif; text-decoration:none; }
+        .icon-btn { width:42px; padding:0; font-size:18px; } .icon-btn:hover,.action:hover { border-color:var(--accent); } .container { max-width:1040px; margin:0 auto; padding:58px 24px 80px; }
+        .eyebrow { margin:0 0 10px; color:var(--accent); font:700 12px Arial,sans-serif; letter-spacing:1.8px; text-transform:uppercase; } h1 { margin:0 0 12px; font-size:clamp(38px,6vw,58px); letter-spacing:-2px; line-height:1; } .subtitle { margin:0 0 34px; color:var(--muted); font:15px Arial,sans-serif; } .subtitle strong { color:var(--text); }
+        .scores { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:20px; } .score-card,.analysis-card { border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:var(--shadow); }
+        .score-card { display:flex; align-items:center; gap:22px; padding:25px; } .score-ring { width:96px; height:96px; flex:none; display:grid; place-items:center; border-radius:50%; background:conic-gradient(var(--accent) calc(var(--score) * 1%), var(--accent-soft) 0); position:relative; }
+        .score-ring::after { content:""; position:absolute; inset:8px; border-radius:50%; background:var(--surface); } .score-value { position:relative; z-index:1; font:700 26px Arial,sans-serif; } .score-label { margin:0 0 7px; color:var(--muted); font:700 12px Arial,sans-serif; text-transform:uppercase; letter-spacing:1px; } .score-caption { margin:0; color:var(--muted); font:13px Arial,sans-serif; }
+        .analysis-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; } .analysis-card { padding:25px; } .analysis-card h2 { margin:0 0 18px; font-size:21px; } .analysis-card ul,.analysis-card ol { margin:0; padding-left:22px; } .analysis-card li { margin-bottom:12px; color:var(--muted); font:14px/1.55 Arial,sans-serif; } .analysis-card li:last-child { margin-bottom:0; }
+        .skills { display:flex; flex-wrap:wrap; gap:8px; } .skill { padding:8px 10px; border:1px solid color-mix(in srgb,var(--accent) 30%,var(--border)); border-radius:7px; background:var(--accent-soft); color:var(--accent); font:700 12px Arial,sans-serif; }
+        .empty { color:var(--muted); font:14px Arial,sans-serif; } .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:28px; } .action.primary { border-color:var(--accent); background:var(--accent); color:#fff; } .action.primary:hover { background:var(--accent); }
+        @media print { .navbar,.actions { display:none; } body { background:#fff; color:#111; } .container { padding:20px 0; } .score-card,.analysis-card { box-shadow:none; } }
+        @media (max-width:700px) { .container { padding-top:40px; } .scores,.analysis-grid { grid-template-columns:1fr; } .score-card { padding:20px; } }
+    </style>
+</head>
+<body>
+    <nav class="navbar"><div class="logo">Resume<span>AI</span></div><div class="nav-actions"><button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" title="Toggle color theme">☾</button></div></nav>
+    <main class="container">
+        <p class="eyebrow">Your resume report</p><h1>Analysis complete.</h1><p class="subtitle">Target role: <strong>{{ job_role }}</strong></p>
+        <section class="scores">
+            <article class="score-card"><div class="score-ring" style="--score: {{ analysis.overall_score }}"><span class="score-value">{{ analysis.overall_score }}</span></div><div><p class="score-label">Overall score</p><p class="score-caption">Resume quality and relevance</p></div></article>
+            <article class="score-card"><div class="score-ring" style="--score: {{ analysis.ats_score }}"><span class="score-value">{{ analysis.ats_score }}</span></div><div><p class="score-label">ATS score</p><p class="score-caption">Compatibility with hiring systems</p></div></article>
+        </section>
+        <section class="analysis-grid">
+            <article class="analysis-card"><h2>Strengths</h2><ul>{% for item in analysis.strengths %}<li>{{ item }}</li>{% empty %}<li class="empty">No strengths were returned.</li>{% endfor %}</ul></article>
+            <article class="analysis-card"><h2>Weaknesses</h2><ul>{% for item in analysis.weaknesses %}<li>{{ item }}</li>{% empty %}<li class="empty">No weaknesses were returned.</li>{% endfor %}</ul></article>
+            <article class="analysis-card"><h2>Missing skills</h2><div class="skills">{% for item in analysis.missing_skills %}<span class="skill">{{ item }}</span>{% empty %}<span class="empty">No missing skills were identified.</span>{% endfor %}</div></article>
+            <article class="analysis-card"><h2>Suggestions</h2><ol>{% for item in analysis.suggestions %}<li>{{ item }}</li>{% empty %}<li class="empty">No suggestions were returned.</li>{% endfor %}</ol></article>
+        </section>
+        <div class="actions"><a class="action primary" href="/">Analyze another resume</a><button class="action" type="button" onclick="window.print()">Print / Save as PDF</button></div>
+    </main>
+    <script>
+        const root = document.documentElement; const toggle = document.querySelector(".theme-toggle");
+        const setTheme = (theme) => { root.dataset.theme = theme; localStorage.setItem("resumeai-theme", theme); toggle.textContent = theme === "dark" ? "☀" : "☾"; };
+        setTheme(root.dataset.theme); toggle.addEventListener("click", () => setTheme(root.dataset.theme === "dark" ? "light" : "dark"));
+    </script>
+</body>
+</html>
