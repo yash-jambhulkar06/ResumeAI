@@ -36,9 +36,17 @@ DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 ALLOWED_HOSTS = [
     host.strip()
-    for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1"
+    ).split(",")
     if host.strip()
 ]
+
+render_hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+
+if render_hostname:
+    ALLOWED_HOSTS.append(render_hostname)
 
 
 # --------------------------------------------------
@@ -264,3 +272,8 @@ CSRF_TRUSTED_ORIGINS = [
     for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
+
+if render_hostname:
+    CSRF_TRUSTED_ORIGINS.append(
+        f"https:/.{render_hostname}"
+    )
