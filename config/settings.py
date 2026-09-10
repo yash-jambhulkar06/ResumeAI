@@ -275,5 +275,5 @@ CSRF_TRUSTED_ORIGINS = [
 
 if render_hostname:
     CSRF_TRUSTED_ORIGINS.append(
-        f"https:/.{render_hostname}"
+        f"https://{render_hostname}"
     )
