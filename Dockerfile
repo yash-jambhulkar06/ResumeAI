@@ -1,38 +1,48 @@
 FROM python:3.12-slim
 
-# Prevent Python from creating .pyc files
-# and ensure logs appear immediately
+# Prevent Python from writing bytecode and ensure logs flush immediately
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PORT=8000
 
 WORKDIR /app
 
-# Install system dependencies
-# Tesseract is required for image resume OCR
+# Install system dependencies (curl for healthcheck, tesseract for image resume OCR)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        curl \
         tesseract-ocr \
         tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy project
+# Copy application source code
 COPY . .
 
-# Collect static files
+# Run collectstatic at build time
 RUN python manage.py collectstatic --noinput
 
-# Koyeb provides PORT at runtime
-ENV PORT=8000
+# Create and switch to non-root application user for production security
+RUN useradd --create-home appuser \
+    && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
-# Start Django with Gunicorn
+# Container Healthcheck probe
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health/ || exit 1
+
+# Start Django application with Gunicorn
 CMD python manage.py migrate --noinput && \
     gunicorn config.wsgi:application \
     --bind 0.0.0.0:${PORT} \
-    --workers 2
+    --workers 3 \
+    --threads 2 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -

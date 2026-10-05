@@ -127,3 +127,13 @@ class HomeViewTests(TestCase):
 		self.assertEqual(record.seniority_level, "Senior")
 		self.assertEqual(record.overall_score, 85)
 		self.assertIn("category_scores", record.details)
+
+
+class HealthCheckTests(TestCase):
+	def test_health_check_endpoint_returns_healthy(self):
+		response = self.client.get("/health/", secure=True)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertEqual(data.get("status"), "healthy")
+		self.assertEqual(data.get("database"), "connected")
+
