@@ -6,10 +6,56 @@ Google XYZ formula bullet point rewrites.
 import json
 import logging
 import os
+import re
 from typing import Dict, Any
 from groq import Groq, NotFoundError
 
 logger = logging.getLogger(__name__)
+
+
+def parse_json_safely(ai_text: str) -> Dict[str, Any]:
+    """Resilient JSON parser handling markdown wrappers, trailing commas, and unclosed tokens."""
+    cleaned = ai_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+    # 1. Direct standard parse
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Extract outermost JSON structure
+    match = re.search(r"(\{.*\})", cleaned, re.DOTALL)
+    if match:
+        extracted = match.group(1)
+        try:
+            return json.loads(extracted)
+        except json.JSONDecodeError:
+            # Strip illegal trailing commas before brackets or braces
+            sanitized = re.sub(r",\s*([\]}])", r"\1", extracted)
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                pass
+
+    # 3. Handle potential mid-token truncation
+    candidate = cleaned
+    if candidate.endswith(","):
+        candidate = candidate[:-1].strip()
+
+    # Close unclosed quote if odd count
+    quote_count = candidate.count('"') - candidate.count(r'\"')
+    if quote_count % 2 != 0:
+        candidate += '"'
+
+    open_braces = max(0, candidate.count("{") - candidate.count("}"))
+    open_brackets = max(0, candidate.count("[") - candidate.count("]"))
+    candidate += ("]" * open_brackets) + ("}" * open_braces)
+    candidate = re.sub(r",\s*([\]}])", r"\1", candidate)
+
+    return json.loads(candidate)
 
 
 def analyze_resume_with_ai(resume_text: str) -> Dict[str, Any]:
@@ -40,17 +86,17 @@ Analyze the following resume thoroughly based on modern hiring standards, ATS pa
 RESUME CONTENT:
 {resume_text}
 
-Evaluate and return ONLY valid JSON with this exact schema:
+Evaluate and return ONLY a valid JSON object matching this exact schema:
 {{
     "detected_role": "Primary role or specialization identified (e.g. Full Stack Developer, Data Engineer, Product Manager)",
     "seniority_level": "Entry-Level, Mid-Level, Senior, or Lead",
-    "overall_score": 0,
-    "ats_score": 0,
+    "overall_score": 75,
+    "ats_score": 70,
     "category_scores": {{
-        "impact_metrics": 0,
-        "ats_parsability": 0,
-        "skills_depth": 0,
-        "structure_brevity": 0
+        "impact_metrics": 65,
+        "ats_parsability": 75,
+        "skills_depth": 70,
+        "structure_brevity": 70
     }},
     "strengths": [
         "Concise strength 1 with specific reasoning",
@@ -88,9 +134,9 @@ Evaluate and return ONLY valid JSON with this exact schema:
 
 Rules:
 - All scores must be integers between 0 and 100.
-- Extract actual bullets from the resume to rewrite into Google's XYZ formula ("Accomplished [X], measured by [Y], by doing [Z]"). If the resume has very few bullets, rewrite the most impactful responsibilities.
-- Be objective and realistic; do not invent fictional companies or dates.
-- Return RAW JSON only, without any markdown formatting, backticks, or intro text.
+- Extract actual bullets from the resume to rewrite into Google's XYZ formula ("Accomplished [X], measured by [Y], by doing [Z]").
+- Keep each description concise and avoid inner double quotes inside string values.
+- Ensure the JSON is completely formed and closed.
 """
 
     response = None
@@ -104,12 +150,13 @@ Rules:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a specialized ATS resume analyzer that outputs raw, valid JSON only.",
+                        "content": "You are a professional ATS resume analyzer that outputs raw, valid JSON only.",
                     },
                     {"role": "user", "content": prompt},
                 ],
+                response_format={"type": "json_object"},
                 temperature=0.2,
-                max_tokens=2048,
+                max_tokens=4096,
             )
             break
         except NotFoundError as err:
@@ -117,27 +164,36 @@ Rules:
             last_error = err
             continue
         except Exception as err:
-            logger.warning("Error calling Groq model %s: %s", model, err)
-            last_error = err
-            continue
+            # If response_format is not supported by a specific model, retry without it
+            try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are a professional ATS resume analyzer that outputs raw, valid JSON only.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.2,
+                    max_tokens=4096,
+                )
+                break
+            except Exception as inner_err:
+                logger.warning("Error calling Groq model %s: %s", model, inner_err)
+                last_error = inner_err
+                continue
 
     if response is None:
         raise ValueError(f"Failed to analyze resume with Groq. Last error: {last_error}")
 
     ai_text = response.choices[0].message.content.strip()
-    if ai_text.startswith("```"):
-        ai_text = ai_text.replace("```json", "").replace("```", "").strip()
 
     try:
-        data = json.loads(ai_text)
-    except json.JSONDecodeError:
-        # Fallback in case of subtle trailing markdown
-        import re
-        json_match = re.search(r"\{.*\}", ai_text, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group(0))
-        else:
-            raise ValueError("AI response could not be parsed as JSON.")
+        data = parse_json_safely(ai_text)
+    except Exception as exc:
+        logger.error("JSON parsing error on AI output: %s\nRaw output: %s", exc, ai_text)
+        raise ValueError("We encountered a formatting issue with the AI response. Please try again.") from exc
 
     # Normalize defaults in case of subtle LLM omission
     data.setdefault("detected_role", "General Software Engineering")
