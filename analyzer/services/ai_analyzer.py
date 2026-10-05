@@ -4,9 +4,12 @@ Evaluates resumes on ATS parsability, impact metrics, domain detection, and gene
 Google XYZ formula bullet point rewrites.
 """
 import json
+import logging
 import os
 from typing import Dict, Any
-from groq import Groq
+from groq import Groq, NotFoundError
+
+logger = logging.getLogger(__name__)
 
 
 def analyze_resume_with_ai(resume_text: str) -> Dict[str, Any]:
@@ -16,7 +19,18 @@ def analyze_resume_with_ai(resume_text: str) -> Dict[str, Any]:
         raise ValueError("Resume analysis is temporarily unavailable. GROQ_API_KEY is not configured.")
 
     client = Groq(api_key=api_key)
-    model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    configured_model = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+
+    # Fallback list for maximum resilience across different Groq accounts and regions
+    candidate_models = [
+        configured_model,
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+        "qwen/qwen3.8-27b",
+        "llama-3.3-70b-versatile",
+    ]
+    seen = set()
+    models_to_try = [m for m in candidate_models if m and not (m in seen or seen.add(m))]
 
     prompt = f"""
 You are an elite Fortune 500 tech recruiter and certified ATS resume specialist.
@@ -79,24 +93,51 @@ Rules:
 - Return RAW JSON only, without any markdown formatting, backticks, or intro text.
 """
 
-    response = client.chat.completions.create(
-        model=model_name,
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a specialized ATS resume analyzer that outputs raw, valid JSON only.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.2,
-        max_tokens=2048,
-    )
+    response = None
+    last_error = None
+
+    for model in models_to_try:
+        try:
+            logger.info("Attempting resume analysis with Groq model: %s", model)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a specialized ATS resume analyzer that outputs raw, valid JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=2048,
+            )
+            break
+        except NotFoundError as err:
+            logger.warning("Groq model %s not found on this account/region. Falling back to next model.", model)
+            last_error = err
+            continue
+        except Exception as err:
+            logger.warning("Error calling Groq model %s: %s", model, err)
+            last_error = err
+            continue
+
+    if response is None:
+        raise ValueError(f"Failed to analyze resume with Groq. Last error: {last_error}")
 
     ai_text = response.choices[0].message.content.strip()
     if ai_text.startswith("```"):
         ai_text = ai_text.replace("```json", "").replace("```", "").strip()
 
-    data = json.loads(ai_text)
+    try:
+        data = json.loads(ai_text)
+    except json.JSONDecodeError:
+        # Fallback in case of subtle trailing markdown
+        import re
+        json_match = re.search(r"\{.*\}", ai_text, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
+        else:
+            raise ValueError("AI response could not be parsed as JSON.")
 
     # Normalize defaults in case of subtle LLM omission
     data.setdefault("detected_role", "General Software Engineering")
