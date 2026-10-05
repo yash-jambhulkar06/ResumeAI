@@ -5,3 +5,15 @@ __pycache__/
 db.sqlite3
 staticfiles/
 media/
+
+# IDE & agent tooling
+.agent/
+.agents/
+.gemini/
+.gsd/
+GSD-STYLE.md
+PROJECT_RULES.md
+VERSION
+adapters/
+model_capabilities.yaml
+scripts/
